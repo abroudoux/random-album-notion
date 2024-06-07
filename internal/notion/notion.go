@@ -1,12 +1,14 @@
 package notion
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 
 	types "github.com/abroudoux/random-album/internal/types"
+	"github.com/jomei/notionapi"
 )
 
 func GetTodos(notionPageId string, notionAPIKey string, notionAPIVersion string) ([]string, error) {
@@ -85,4 +87,22 @@ func appendTodos(todos []string, notionResponse types.NotionResponse) []string {
     }
 
     return todos
+}
+
+// TODO - Fix this function (API TOKEN is not working)
+func GetLastEditedTime(notionAPIKey string, notionPageId string) (string, error) {
+    client := notionapi.NewClient(notionapi.Token(notionAPIKey))
+    page, err := client.Page.Get(context.Background(), notionapi.PageID(notionPageId))
+
+    if err != nil {
+		return "", fmt.Errorf("failed to get page: %v", err)
+	}
+
+    pageLastModifications := page.LastEditedTime
+
+    return pageLastModifications.String(), nil
+
+	pageString := fmt.Sprintf("%v", page)
+
+	return pageString, nil
 }
