@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"math/rand"
 	"net/http"
 	"os"
@@ -13,23 +12,29 @@ import (
 )
 
 const notionAPIVersion string = "2022-06-28"
-type Block struct {
-	Object string `json:"object"`
-	ID     string `json:"id"`
-	Type   string `json:"type"`
-	ToDo   *struct {
-		RichText []struct {
-			Text struct {
-				Content string `json:"content"`
-			} `json:"text"`
-		} `json:"rich_text"`
-		Checked bool `json:"checked"`
-	} `json:"to_do,omitempty"`
+type NotionResponse struct {
+	Object     string    `json:"object"`
+	Results    []Block   `json:"results"`
+	NextCursor *string   `json:"next_cursor"`
+	HasMore    bool      `json:"has_more"`
 }
 
-type NotionResponse struct {
-	Object  string  `json:"object"`
-	Results []Block `json:"results"`
+type Block struct {
+	Type string `json:"type"`
+	ToDo *ToDo  `json:"to_do"`
+}
+
+type ToDo struct {
+	Checked  bool       `json:"checked"`
+	RichText []RichText `json:"rich_text"`
+}
+
+type RichText struct {
+	Text Text `json:"text"`
+}
+
+type Text struct {
+	Content string `json:"content"`
 }
 
 func Load() (string, string) {
@@ -46,49 +51,62 @@ func Load() (string, string) {
 	return notionApiKey, notionPageId
 }
 
-func GetPage(notionPageId string, notionApiKey string, notionAPIVersion string) ([]string, error) {
+func GetTodos(notionPageId string, notionApiKey string, notionAPIVersion string) ([]string, error) {
 	url := "https://api.notion.com/v1/blocks/" + notionPageId + "/children"
 	var bearer = "Bearer " + notionApiKey
 
-	req, err := http.NewRequest("GET", url, nil)
-
-	if err != nil {
-		return nil, fmt.Errorf("error creating request: %v", err)
-	}
-
-	req.Header.Add("Authorization", bearer)
-	req.Header.Add("Notion-Version", notionAPIVersion)
-
 	client := &http.Client{}
-	resp, err := client.Do(req)
-
-	if err != nil {
-		return nil, fmt.Errorf("error making request: %v", err)
-	}
-
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-
-	if err != nil {
-		return nil, fmt.Errorf("error reading response body: %v", err)
-	}
-
-	var notionResponse NotionResponse
-	err = json.Unmarshal(body, &notionResponse)
-
-	if err != nil {
-		return nil, fmt.Errorf("error unmarshalling JSON response: %v", err)
-	}
-
 	var todos []string
-	
-	for _, block := range notionResponse.Results {
-		if block.Type == "to_do" && block.ToDo != nil && !block.ToDo.Checked {
-			for _, richText := range block.ToDo.RichText {
-				todos = append(todos, richText.Text.Content)
+	var startCursor *string
+	hasMore := true
+
+	for hasMore {
+		req, err := http.NewRequest("GET", url, nil)
+
+		if err != nil {
+			return nil, fmt.Errorf("error creating request: %v", err)
+		}
+
+		req.Header.Add("Authorization", bearer)
+		req.Header.Add("Notion-Version", notionAPIVersion)
+
+		if startCursor != nil {
+			q := req.URL.Query()
+			q.Add("start_cursor", *startCursor)
+			req.URL.RawQuery = q.Encode()
+		}
+
+		resp, err := client.Do(req)
+
+		if err != nil {
+			return nil, fmt.Errorf("error making request: %v", err)
+		}
+
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+
+		if err != nil {
+			return nil, fmt.Errorf("error reading response body: %v", err)
+		}
+
+		var notionResponse NotionResponse
+		err = json.Unmarshal(body, &notionResponse)
+
+		if err != nil {
+			return nil, fmt.Errorf("error unmarshalling JSON response: %v", err)
+		}
+
+		for _, block := range notionResponse.Results {
+			if block.Type == "to_do" && block.ToDo != nil && !block.ToDo.Checked {
+				for _, richText := range block.ToDo.RichText {
+					todos = append(todos, richText.Text.Content)
+				}
 			}
 		}
+
+		hasMore = notionResponse.HasMore
+		startCursor = notionResponse.NextCursor
 	}
 
 	return todos, nil
@@ -104,10 +122,11 @@ func ChooseRandomAlbum(albums []string) string {
 func main() {
 	notionApiKey, notionPageId := Load()
 
-	todos, err := GetPage(notionPageId, notionApiKey, notionAPIVersion)
+	todos, err := GetTodos(notionPageId, notionApiKey, notionAPIVersion)
 
 	if err != nil {
-		log.Fatalf("Error fetching page: %v", err)
+		fmt.Printf("Error: %v\n", err)
+		return
 	}
 
 	randomAlbum := ChooseRandomAlbum(todos)
