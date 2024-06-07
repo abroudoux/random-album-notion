@@ -11,9 +11,9 @@ import (
 const notionAPIVersion string = "2022-06-28"
 
 func main() {
-	notionApiKey, notionPageId := env.Load()
+	notionAPIKey, notionPageId := env.Load()
 
-	todos, err := notion.GetTodos(notionPageId, notionApiKey, notionAPIVersion)
+	todos, err := notion.GetTodos(notionPageId, notionAPIKey, notionAPIVersion)
 
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)

@@ -13,9 +13,9 @@ func Load() (string, string) {
 		fmt.Println("Error loading .env file", err)
 	}
 
-	envApiKey := "NOTION_API_KEY"
+	envAPIKey := "NOTION_API_KEY"
 	envPageId := "NOTION_PAGE_ID"
-	notionApiKey := os.Getenv(envApiKey)
+	notionApiKey := os.Getenv(envAPIKey)
 	notionPageId := os.Getenv(envPageId)
 
 	return notionApiKey, notionPageId

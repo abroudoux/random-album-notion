@@ -9,63 +9,80 @@ import (
 	types "github.com/abroudoux/random-album/internal/types"
 )
 
-func GetTodos(notionPageId string, notionApiKey string, notionAPIVersion string) ([]string, error) {
-	url := "https://api.notion.com/v1/blocks/" + notionPageId + "/children"
-	var bearer = "Bearer " + notionApiKey
+func GetTodos(notionPageId string, notionAPIKey string, notionAPIVersion string) ([]string, error) {
+    url := "https://api.notion.com/v1/blocks/" + notionPageId + "/children"
+    var bearer = "Bearer " + notionAPIKey
 
-	client := &http.Client{}
-	var todos []string
-	var startCursor *string
-	hasMore := true
+    client := &http.Client{}
+    var todos []string
+    var startCursor *string
 
-	for hasMore {
-		req, err := http.NewRequest("GET", url, nil)
+    for {
+        notionResponse, err := fetchNotionResponse(url, bearer, notionAPIVersion, startCursor, client)
 
-		if err != nil {
-			return nil, fmt.Errorf("error creating request: %v", err)
-		}
+        if err != nil {
+            return nil, fmt.Errorf("failed to fetch notion response: %v", err)
+        }
 
-		req.Header.Add("Authorization", bearer)
-		req.Header.Add("Notion-Version", notionAPIVersion)
+        todos = appendTodos(todos, notionResponse)
 
-		if startCursor != nil {
-			q := req.URL.Query()
-			q.Add("start_cursor", *startCursor)
-			req.URL.RawQuery = q.Encode()
-		}
+        if !notionResponse.HasMore {
+            break
+        }
 
-		resp, err := client.Do(req)
+        startCursor = notionResponse.NextCursor
+    }
 
-		if err != nil {
-			return nil, fmt.Errorf("error making request: %v", err)
-		}
+    return todos, nil
+}
 
-		defer resp.Body.Close()
+func fetchNotionResponse(url, bearer, notionAPIVersion string, startCursor *string, client *http.Client) (types.NotionResponse, error) {
+    req, err := http.NewRequest("GET", url, nil)
 
-		body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return types.NotionResponse{}, fmt.Errorf("error creating request: %v", err)
+    }
 
-		if err != nil {
-			return nil, fmt.Errorf("error reading response body: %v", err)
-		}
+    req.Header.Add("Authorization", bearer)
+    req.Header.Add("Notion-Version", notionAPIVersion)
 
-		var notionResponse types.NotionResponse
-		err = json.Unmarshal(body, &notionResponse)
+    if startCursor != nil {
+        q := req.URL.Query()
+        q.Add("start_cursor", *startCursor)
+        req.URL.RawQuery = q.Encode()
+    }
 
-		if err != nil {
-			return nil, fmt.Errorf("error unmarshalling JSON response: %v", err)
-		}
+    resp, err := client.Do(req)
 
-		for _, block := range notionResponse.Results {
-			if block.Type == "to_do" && block.ToDo != nil && !block.ToDo.Checked {
-				for _, richText := range block.ToDo.RichText {
-					todos = append(todos, richText.Text.Content)
-				}
-			}
-		}
+    if err != nil {
+        return types.NotionResponse{}, fmt.Errorf("error making request: %v", err)
+    }
 
-		hasMore = notionResponse.HasMore
-		startCursor = notionResponse.NextCursor
-	}
+    defer resp.Body.Close()
 
-	return todos, nil
+    body, err := io.ReadAll(resp.Body)
+
+    if err != nil {
+        return types.NotionResponse{}, fmt.Errorf("error reading response body: %v", err)
+    }
+
+    var notionResponse types.NotionResponse
+
+    if err := json.Unmarshal(body, &notionResponse); err != nil {
+        return types.NotionResponse{}, fmt.Errorf("error unmarshalling JSON response: %v", err)
+    }
+
+    return notionResponse, nil
+}
+
+func appendTodos(todos []string, notionResponse types.NotionResponse) []string {
+    for _, block := range notionResponse.Results {
+        if block.Type == "to_do" && block.ToDo != nil && !block.ToDo.Checked {
+            for _, richText := range block.ToDo.RichText {
+                todos = append(todos, richText.Text.Content)
+            }
+        }
+    }
+
+    return todos
 }
