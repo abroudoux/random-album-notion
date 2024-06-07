@@ -6,50 +6,12 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
-	"os"
 
-	"github.com/joho/godotenv"
+	env_loader "github.com/abroudoux/random-album/internal/env"
+	types "github.com/abroudoux/random-album/internal/types"
 )
 
 const notionAPIVersion string = "2022-06-28"
-type NotionResponse struct {
-	Object     string    `json:"object"`
-	Results    []Block   `json:"results"`
-	NextCursor *string   `json:"next_cursor"`
-	HasMore    bool      `json:"has_more"`
-}
-
-type Block struct {
-	Type string `json:"type"`
-	ToDo *ToDo  `json:"to_do"`
-}
-
-type ToDo struct {
-	Checked  bool       `json:"checked"`
-	RichText []RichText `json:"rich_text"`
-}
-
-type RichText struct {
-	Text Text `json:"text"`
-}
-
-type Text struct {
-	Content string `json:"content"`
-}
-
-func Load() (string, string) {
-	err := godotenv.Load()
-	if err != nil {
-		fmt.Println("Error loading .env file", err)
-	}
-
-	envApiKey := "NOTION_API_KEY"
-	envPageId := "NOTION_PAGE_ID"
-	notionApiKey := os.Getenv(envApiKey)
-	notionPageId := os.Getenv(envPageId)
-
-	return notionApiKey, notionPageId
-}
 
 func GetTodos(notionPageId string, notionApiKey string, notionAPIVersion string) ([]string, error) {
 	url := "https://api.notion.com/v1/blocks/" + notionPageId + "/children"
@@ -90,7 +52,7 @@ func GetTodos(notionPageId string, notionApiKey string, notionAPIVersion string)
 			return nil, fmt.Errorf("error reading response body: %v", err)
 		}
 
-		var notionResponse NotionResponse
+		var notionResponse types.NotionResponse
 		err = json.Unmarshal(body, &notionResponse)
 
 		if err != nil {
@@ -120,7 +82,7 @@ func ChooseRandomAlbum(albums []string) string {
 }
 
 func main() {
-	notionApiKey, notionPageId := Load()
+	notionApiKey, notionPageId := env_loader.Load()
 
 	todos, err := GetTodos(notionPageId, notionApiKey, notionAPIVersion)
 
