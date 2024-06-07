@@ -5,6 +5,7 @@ import (
 
 	env "github.com/abroudoux/random-album/internal/env"
 	notion "github.com/abroudoux/random-album/internal/notion"
+	spotify "github.com/abroudoux/random-album/internal/spotify"
 	utils "github.com/abroudoux/random-album/internal/utils"
 )
 
@@ -21,6 +22,12 @@ func main() {
 	}
 
 	randomAlbum := utils.ChooseRandomAlbum(todos)
+	stdout, err := spotify.PlayAlbum(randomAlbum)
 
-	fmt.Println(randomAlbum)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+
+	fmt.Println(stdout)
 }
